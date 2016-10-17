@@ -603,7 +603,7 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
 int PGconnection::pqGetc(char *buf)
 {
     int i;
-    for (i=0; !client.available() && i < 10; i++) {
+    for (i=0; !client->available() && i < 10; i++) {
         delay (i * 10 + 10);
     }
     if (!client->available()) {
