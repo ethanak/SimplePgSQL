@@ -36,12 +36,12 @@
 
 IPAddress PGIP(192,168,1,5);
 
-const char ssid[] = "YOUR_SSID";        //  your network SSID (name)
-const char pass[] = "YOUR_PASSWORD";    // your network password
+const char ssid[] = "network_ssid";      //  your network SSID (name)
+const char pass[] = "network_pass";      // your network password
 
-const char user[] = "db_user";          // your database user
-const char password[] = "db_password";  // your database password
-const char dbname[] = "arduino";        // your database name
+const char user[] = "db_username";       // your database user
+const char password[] = "db_password";   // your database password
+const char dbname[] = "db_name";         // your database name
 int WiFiStatus;
 
 WiFiClient client;
@@ -73,7 +73,7 @@ void checkConnection()
 static PROGMEM const char query_rel[] = "\
 SELECT a.attname \"Column\",\
   pg_catalog.format_type(a.atttypid, a.atttypmod) \"Type\",\
-  case when a.attnotnull then 'not null ' else '' end ||\
+  case when a.attnotnull then 'not null ' else 'null' end as \"null\",\
   (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)\
    FROM pg_catalog.pg_attrdef d\
    WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) \"Extras\"\
@@ -158,7 +158,7 @@ void doPg(void)
             return;
         }
 
-        if (!strcmp(inbuf,"exit",4)) {
+        if (!strncmp(inbuf,"exit",4)) {
             conn.close();
             Serial.println("Thank you");
             pg_status = -1;
