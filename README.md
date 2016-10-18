@@ -59,6 +59,7 @@ Initialize connection.
   * `db` - database name (defaults to user name)
   * `charset` - client encoding
   * `port` - server port
+
 #### Returns:
   connection status (see below)
 
