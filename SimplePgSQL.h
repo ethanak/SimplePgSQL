@@ -1,5 +1,5 @@
 /*
- * SimplePgSQL.h - Lightweight PostgreSQL connector for ESP8266
+ * SimplePgSQL.h - Lightweight PostgreSQL connector for Arduino
  * Copyright (C) Bohdan R. Rau 2016 <ethanak@polip.com>
  *
  * SimplePgSQL is free software; you can redistribute it and/or
@@ -26,6 +26,7 @@
 // You need MD5 library from https://github.com/tzikis/ArduinoMD5
 // for Arduino boards. Uncomment only if you have this library and
 // you must use md5 passwords.
+// Do not use it on 32 kB ATMega processors!
 
 // #define PG_USE_MD5 1
 
@@ -34,11 +35,8 @@
 #define PG_USE_MD5 1
 #endif
 
-#ifdef ESP8266
-#include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
-#endif
+#include <Arduino.h>
+#include <Client.h>
 
 typedef enum
 {
@@ -218,10 +216,12 @@ class PGconnection {
         int build_startup_packet(char *packet, const char *db, const char *charset);
         byte conn_status;
         byte attempts;
+/*
         int32_t be_pid;
         int32_t be_key;
-        short int _nfields;
-        short int _ntuples;
+*/
+        int16_t _nfields;
+        int16_t _ntuples;
         uint32_t _formats;
         uint32_t _null;
         byte _binary;

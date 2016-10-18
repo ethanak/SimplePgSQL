@@ -1,5 +1,5 @@
 /*
- * SimplePgSQL.c - Lightweight PostgreSQL connector for ESP8266
+ * SimplePgSQL.c - Lightweight PostgreSQL connector for Arduino
  * Copyright (C) Bohdan R. Rau 2016 <ethanak@polip.com>
  *
  * SimplePgSQL is free software; you can redistribute it and/or
@@ -18,16 +18,15 @@
  * 	51 Franklin Street, Fifth Floor
  * 	Boston, MA  02110-1301, USA.
  */
+
+ // 238 469 / 34004
 #include "SimplePgSQL.h"
 
 #ifdef PG_USE_MD5
-
-
 static void
 bytesToHex(const uint8_t b[16], char *s)
 {
-	int			q,
-				w;
+	int q, w;
     static PROGMEM const char hex[] = "0123456789abcdef";
 
 	for (q = 0, w = 0; q < 16; q++)
@@ -40,44 +39,34 @@ bytesToHex(const uint8_t b[16], char *s)
 
 #ifdef ESP8266
 #include <md5.h>
-
-
-int pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
+static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
 {
-	size_t passwd_len = strlen(password);
-	uint8_t *crypt_buf = (uint8_t *)malloc(passwd_len + salt_len + 1);
-	uint8_t sum[16];
-
-	if (!crypt_buf) return false;
-	memcpy(crypt_buf, password, passwd_len);
-	memcpy(crypt_buf + passwd_len, salt, salt_len);
-	strcpy(outbuf, "md5");
     md5_context_t context;
+	uint8_t sum[16];
+    *outbuf++ = 'm';
+    *outbuf++ = 'd';
+    *outbuf++ = '5';
     MD5Init(&context);
-    MD5Update(&context, crypt_buf, (uint16_t)(passwd_len + salt_len));
+    MD5Update(&context, (uint8_t *)password, strlen(password));
+    MD5Update(&context, (uint8_t *)salt, salt_len);
     MD5Final(sum, &context);
 	bytesToHex(sum, outbuf+3);
-	free(crypt_buf);
-	return true;
 }
 #else
 #include <MD5.h>
-int pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
+static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
 {
-	size_t passwd_len = strlen(password);
-	char *crypt_buf = (char *)malloc(passwd_len + salt_len + 1);
+	MD5_CTX context;
+	uint8_t sum[16];
+    *outbuf++ = 'm';
+    *outbuf++ = 'd';
+    *outbuf++ = '5';
 
-	if (!crypt_buf) return false;
-	memcpy(crypt_buf, password, passwd_len);
-	memcpy(crypt_buf + passwd_len, salt, salt_len);
-	crypt_buf[passwd_len + salt_len] = 0;
-    strcpy(outbuf, "md5");
-    unsigned char *hash = MD5::make_hash((const char *)crypt_buf);
-    bytesToHex(hash, outbuf+3);
-    free(hash);
-	free(crypt_buf);
-    Serial.println(outbuf);
-	return true;
+    MD5::MD5Init(&context);
+    MD5::MD5Update(&context, (uint8_t *)password, strlen(password));
+    MD5::MD5Update(&context, (uint8_t *)salt, salt_len);
+    MD5::MD5Final(sum, &context);
+	bytesToHex(sum, outbuf+3);
 }
 #endif
 #endif
@@ -149,8 +138,7 @@ int PGconnection::setDbLogin(IPAddress server,
     byte connected = client -> connect(server, port);
     if (!connected) {
         setMsg_P(EM_CONN, PG_RSTAT_HAVE_ERROR);
-        conn_status = CONNECTION_BAD;
-        return conn_status;
+        return conn_status = CONNECTION_BAD;
     }
     packetlen = build_startup_packet(NULL, db, charset);
     if (packetlen > bufSize - 10) {
@@ -255,18 +243,8 @@ int PGconnection::status(void)
             }
             char *crypt_pwd = Buffer + (bufSize - (2 * (MD5_PASSWD_LEN + 1)));
             char *crypt_pwd2 = crypt_pwd + MD5_PASSWD_LEN + 1;
-            if (!pg_md5_encrypt(pwd, _user,
-                                        strlen(_user), crypt_pwd2))
-                {
-                setMsg_P(EM_INTR, PG_RSTAT_HAVE_ERROR);
-
-                return conn_status = CONNECTION_BAD;
-            }
-            if (!pg_md5_encrypt(crypt_pwd2 + 3, salt,4, crypt_pwd))
-                {
-                setMsg_P(EM_INTR, PG_RSTAT_HAVE_ERROR);
-                return conn_status = CONNECTION_BAD;
-            }
+            pg_md5_encrypt(pwd, _user, strlen(_user), crypt_pwd2);
+            pg_md5_encrypt(crypt_pwd2 + 3, salt,4, crypt_pwd);
             pwd = crypt_pwd;
         }
 #endif
@@ -282,7 +260,7 @@ int PGconnection::status(void)
             if (pqGetc(&bereq)) goto read_error;
             if (pqGetInt4(&msgLen)) goto read_error;
             msgLen -= 4;
-            if (bereq == 'A' || bereq == 'N' || bereq == 'S') {
+            if (bereq == 'A' || bereq == 'N' || bereq == 'S' || bereq == 'K') {
                 if (pqSkipnchar(msgLen))  goto read_error;
                 continue;
             }
@@ -290,11 +268,13 @@ int PGconnection::status(void)
                 pqGetNotice(PG_RSTAT_HAVE_ERROR);
                 return conn_status = CONNECTION_BAD;
             }
-            if (bereq == 'K') {
+
+/*            if (bereq == 'K') {
                 if (pqGetInt4(&be_pid)) goto read_error;
                 if (pqGetInt4(&be_key)) goto read_error;
                 continue;
             }
+*/
             if (bereq == 'Z') {
                 pqSkipnchar(msgLen);
                 return conn_status = CONNECTION_OK;
@@ -648,7 +628,7 @@ int PGconnection::pqGetc(char *buf)
 
 int PGconnection::pqGetInt4(int32_t *result)
 {
-	uint32 tmp4 = 0;
+	uint32_t tmp4 = 0;
     byte tmp,i;
     for (i = 0; i < 4; i++) {
         if (pqGetc((char *)&tmp)) return -1;
@@ -767,11 +747,7 @@ void PGconnection::setMsg(const char *s, int type)
 
 void PGconnection::setMsg_P(const char *s, int type)
 {
-    char *c = Buffer;
-    for (;;) {
-        *c = pgm_read_byte(s++);
-        if (!*c++) break;
-    }
+    strcpy_P(Buffer, s);
     result_status = (result_status & ~PG_RSTAT_HAVE_MASK) | type;
 }
 
