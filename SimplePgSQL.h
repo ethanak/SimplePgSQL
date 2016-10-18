@@ -66,6 +66,8 @@ typedef enum
 #define PG_FLAG_IGNORE_NOTICES 1
 // do not store column names
 #define PG_FLAG_IGNORE_COLUMNS 2
+// never set this flag manually!
+# define PG_FLAG_STATIC_BUFFER 4
 
 // ready for next query
 #define PG_RSTAT_READY 1
@@ -92,7 +94,10 @@ typedef enum
 
 class PGconnection {
     public:
-        PGconnection(Client *c, int flags = 0, int memory = 0);
+        PGconnection(Client *c,
+                int flags = 0,
+                int memory = 0,
+                char *foreignBuffer = NULL);
         /*
          * returns connection status.
          * passwd may be null in case of 'trust' authorization.

@@ -100,15 +100,22 @@ static PROGMEM const char EM_PASSWD [] = "Password required";
 static PROGMEM const char EM_EMPTY [] = "Query is empty";
 static PROGMEM const char EM_FORMAT [] = "Illegal formatting character";
 
-PGconnection::PGconnection(Client *c, int flags, int memory)
+PGconnection::PGconnection(Client *c,
+        int flags,
+        int memory,
+        char *foreignBuffer)
 {
     conn_status = CONNECTION_NEEDED;
     client = c;
-    Buffer = NULL;
+    Buffer = foreignBuffer;
     _passwd = NULL;
-    _flags = flags;
+    _flags = flags & ~PG_FLAG_STATIC_BUFFER;
+
     if (memory <= 0) bufSize = PG_BUFFER_SIZE;
     else bufSize = memory;
+    if (foreignBuffer) {
+        _flags |= PG_FLAG_STATIC_BUFFER;
+    }
 }
 
 int PGconnection::setDbLogin(IPAddress server,
@@ -146,11 +153,14 @@ int PGconnection::setDbLogin(IPAddress server,
         return conn_status;
     }
     packetlen = build_startup_packet(NULL, db, charset);
-    startpacket=(char *)malloc(packetlen);
+    if (packetlen > bufSize - 10) {
+        setMsg_P(EM_OOM, PG_RSTAT_HAVE_ERROR);
+        conn_status = CONNECTION_BAD;
+        return conn_status;
+    }
+    startpacket=Buffer + (bufSize - (packetlen + 1));
     build_startup_packet(startpacket, db, charset);
-    int rc = pqPacketSend(0, startpacket, packetlen);
-    free(startpacket);
-    if (rc < 0) {
+    if (pqPacketSend(0, startpacket, packetlen) < 0) {
         setMsg_P(EM_WRITE, PG_RSTAT_HAVE_ERROR);
         return conn_status = CONNECTION_BAD;
     }
@@ -164,7 +174,7 @@ void PGconnection::close(void)
         pqPacketSend('X', NULL, 0);
         client->stop();
     }
-    if (Buffer) {
+    if (Buffer && !(_flags & PG_FLAG_STATIC_BUFFER)) {
         free(Buffer);
         Buffer = NULL;
     }
@@ -239,23 +249,21 @@ int PGconnection::status(void)
 #ifdef PG_USE_MD5
         if (areq == AUTH_REQ_MD5) {
             if (pqGetnchar(salt, 4)) goto read_error;
-            char *crypt_pwd = (char *)malloc(2 * (MD5_PASSWD_LEN + 1));
-            if (!crypt_pwd) {
+            if (bufSize < 3 * MD5_PASSWD_LEN + 10) {
                 setMsg_P(EM_OOM, PG_RSTAT_HAVE_ERROR);
                 return conn_status = CONNECTION_BAD;
             }
+            char *crypt_pwd = Buffer + (bufSize - (2 * (MD5_PASSWD_LEN + 1)));
             char *crypt_pwd2 = crypt_pwd + MD5_PASSWD_LEN + 1;
             if (!pg_md5_encrypt(pwd, _user,
                                         strlen(_user), crypt_pwd2))
                 {
-                free(crypt_pwd);
                 setMsg_P(EM_INTR, PG_RSTAT_HAVE_ERROR);
 
                 return conn_status = CONNECTION_BAD;
             }
             if (!pg_md5_encrypt(crypt_pwd2 + 3, salt,4, crypt_pwd))
                 {
-                free(crypt_pwd);
                 setMsg_P(EM_INTR, PG_RSTAT_HAVE_ERROR);
                 return conn_status = CONNECTION_BAD;
             }
@@ -263,9 +271,6 @@ int PGconnection::status(void)
         }
 #endif
         rc=pqPacketSend('p', pwd, strlen(pwd) + 1);
-#ifdef PG_USE_MD5
-        if (areq == AUTH_REQ_MD5) free(pwd);
-#endif
         if (rc) {
             goto write_error;
         }
@@ -517,6 +522,24 @@ int PGconnection::executeFormat(int progmem, const char *format, ...)
     return 0;
 }
 
+#ifdef ESP8266
+
+// there is no strchr_P in ESP8266 ROM :(
+
+static const char *strchr_P(const char *str, char c)
+{
+    char z;
+    for (;;) {
+        z = pgm_read_byte(str);
+        if (!z) return NULL;
+        if (z == c) return str;
+        str++;
+    }
+}
+
+#endif
+
+
 int PGconnection::build_startup_packet(
     char *packet,
     const char *db,
@@ -529,20 +552,30 @@ int PGconnection::build_startup_packet(
 #define ADD_STARTUP_OPTION(optname, optval) \
 	do { \
 		if (packet) \
-			strcpy(packet + packet_len, (char *)optname); \
-		packet_len += strlen((char *)optname) + 1; \
+			strcpy_P(packet + packet_len, (char *)optname); \
+		packet_len += strlen_P((char *)optname) + 1; \
 		if (packet) \
 			strcpy(packet + packet_len, (char *)optval); \
 		packet_len += strlen((char *)optval) + 1; \
 	} while(0)
 
+#define ADD_STARTUP_OPTION_P(optname, optval) \
+	do { \
+		if (packet) \
+			strcpy_P(packet + packet_len, (char *)optname); \
+		packet_len += strlen_P((char *)optname) + 1; \
+		if (packet) \
+			strcpy_P(packet + packet_len, (char *)optval); \
+		packet_len += strlen_P((char *)optval) + 1; \
+	} while(0)
+
 	if (_user && _user[0])
-		ADD_STARTUP_OPTION("user", _user);
+		ADD_STARTUP_OPTION(PSTR("user"), _user);
 	if (db && db[0])
-		ADD_STARTUP_OPTION("database", db);
+		ADD_STARTUP_OPTION(PSTR("database"), db);
 	if (charset && charset[0])
-		ADD_STARTUP_OPTION("client_encoding", charset);
-    ADD_STARTUP_OPTION("application_name", "arduino");
+		ADD_STARTUP_OPTION(PSTR("client_encoding"), charset);
+    ADD_STARTUP_OPTION_P(PSTR("application_name"), PSTR("arduino"));
 #undef ADD_STARTUP_OPTION
 	if (packet)
 		packet[packet_len] = '\0';
@@ -794,23 +827,6 @@ int PGconnection::pqGetNotify(int32_t msgLen)
     return 0;
 }
 
-
-#ifdef ESP8266
-
-// there is no strchr_P in ESP8266 ROM :(
-
-static const char *strchr_P(const char *str, char c)
-{
-    char z;
-    for (;;) {
-        z = pgm_read_byte(str);
-        if (!z) return NULL;
-        if (z == c) return str;
-        str++;
-    }
-}
-
-#endif
 
 int PGconnection::writeMsgPart_P(const char *s, int len, int fine)
 {
