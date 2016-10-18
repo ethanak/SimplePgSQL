@@ -1,5 +1,5 @@
 /*
- * SimplePgSQL.c - Lightweight PostgreSQL connector for ESP8266
+ * SimplePgSQL.c - Lightweight PostgreSQL connector for Arduino
  * Copyright (C) Bohdan R. Rau 2016 <ethanak@polip.com>
  *
  * SimplePgSQL is free software; you can redistribute it and/or
@@ -29,12 +29,25 @@
  * - exit - closes connection
  */
 
+#ifdef ESP8266
 #include <ESP8266WiFi.h>
+#else
+
+// Uncomment line below if you use WiFi shield instead of Ethernet
+// #define USE_ARDUINO WIFI 1
+
+#ifdef USE_ARDUINO_WIFI
+#include <WIFI.h>
+#else
+#include <Ethernet.h>
+#endif
+
+#endif
 #include <SimplePgSQL.h>
 
 
 
-IPAddress PGIP(192,168,1,5);
+IPAddress PGIP(192,168,1,5);        // your PostgreSQL server IP
 
 const char ssid[] = "network_ssid";      //  your network SSID (name)
 const char pass[] = "network_pass";      // your network password
@@ -42,17 +55,37 @@ const char pass[] = "network_pass";      // your network password
 const char user[] = "db_username";       // your database user
 const char password[] = "db_password";   // your database password
 const char dbname[] = "db_name";         // your database name
-int WiFiStatus;
 
+#if defined(ESP8266) || defined(USE_ARDUINO_WIFI)
+int WiFiStatus;
 WiFiClient client;
-PGconnection conn(&client);
+#else
+#define USE_ARDUINO_ETHERNET 1
+EthernetClient client;
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}; // your mac address
+byte ip[] = {192, 168, 1, 177};                    // your IP address
+#endif
+
+char buffer[1024];
+PGconnection conn(&client, 0, 1024, buffer);
 
 void setup(void)
 {
-    Serial.begin(115200);
-    WiFi.begin(ssid, pass);
+    Serial.begin(
+#ifdef ESP8266
+    115200
+#else
+    9600
+#endif
+    );
+#ifdef USE_ARDUINO_ETHERNET
+    Ethernet.begin(mac, ip);
+#else
+    WiFi.begin((char *)ssid, pass);
+#endif
 }
 
+#ifndef USE_ARDUINO_ETHERNET
 void checkConnection()
 {
     int status = WiFi.status();
@@ -69,6 +102,8 @@ void checkConnection()
         }
     }
 }
+
+#endif
 
 static PROGMEM const char query_rel[] = "\
 SELECT a.attname \"Column\",\
@@ -216,9 +251,15 @@ error:
 
 void loop()
 {
+#ifndef USE_ARDUINO_ETHERNET
     checkConnection();
     if (WiFiStatus == WL_CONNECTED) {
+#endif
         doPg();
+#ifndef USE_ARDUINO_ETHERNET
     }
+#endif
     delay(50);
 }
+
+
