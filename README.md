@@ -1,5 +1,22 @@
 # SimplePgSQL
-Simple PostgreSQL connector for Arduino and ESP8266
+
+Simple PostgreSQL connector for Arduino and ESP8266.
+
+Only simple queries are implemented. `COPY` is not implemented due to code size limit,
+but probably will be for ESP8266 only. Large objects are not implemented as obsolete
+and never be.
+
+Available authorization method are `trust`, `password` and `md5`.
+Due to code size limit, `md5` method may be disabled in compilation time,
+decreasing code size for Arduino by some kilobytes.
+
+All methods are asynchronous, but sometimes may block for a while in case of poor network connection.
+
+As column names and notifications are rarely needed in microcontrollers applications, may be disabled.
+In this case only number of fields will be fetched from row description packet, and notification rows will be simply skipped.
+
+All methods uses single internal buffer, allocated at `setDbLogin` and freed on `close`.
+It's possible to provide external (statically allocated) buffer, which may be reused in rest of application.
 
 ### Class and Methods
   * [PGconnection](#pgconnection)
