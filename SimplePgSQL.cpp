@@ -50,7 +50,7 @@ static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char 
     MD5Update(&context, (uint8_t *)password, strlen(password));
     MD5Update(&context, (uint8_t *)salt, salt_len);
     MD5Final(sum, &context);
-	bytesToHex(sum, outbuf+3);
+	bytesToHex(sum, outbuf);
 }
 #else
 #include <MD5.h>
@@ -66,7 +66,7 @@ static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char 
     MD5::MD5Update(&context, (uint8_t *)password, strlen(password));
     MD5::MD5Update(&context, (uint8_t *)salt, salt_len);
     MD5::MD5Final(sum, &context);
-	bytesToHex(sum, outbuf+3);
+	bytesToHex(sum, outbuf);
 }
 #endif
 #endif
