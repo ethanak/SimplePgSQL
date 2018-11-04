@@ -180,7 +180,6 @@ int PGconnection::status(void)
     int32_t msgLen;
     int32_t areq;
     char * pwd = _passwd;
-    char salt[4];
 
     switch(conn_status) {
         case CONNECTION_NEEDED:
@@ -235,6 +234,7 @@ int PGconnection::status(void)
         }
         pwd = _passwd;
 #ifdef PG_USE_MD5
+        char salt[4];
         if (areq == AUTH_REQ_MD5) {
             if (pqGetnchar(salt, 4)) goto read_error;
             if (bufSize < 3 * MD5_PASSWD_LEN + 10) {
@@ -573,10 +573,10 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
         *start++ = pack_type;
         l--;
     }
-    *start++ = ((buf_len + 4) >> 24) & 0xff;
-    *start++ = ((buf_len + 4) >> 16) & 0xff;
-    *start++ = ((buf_len + 4) >> 8) & 0xff;
-    *start++ = (buf_len + 4) & 0xff;
+    *start++ = ((buf_len + 4) & 0xff000000) >> 24;
+    *start++ = ((buf_len + 4) & 0x00ff0000) >> 16;
+    *start++ = ((buf_len + 4) & 0x0000ff00) >> 8;
+    *start++ = (buf_len + 4) & 0x000000ff;
     if (progmem) {
         while (buf_len > 0) {
             while (buf_len > 0 && l > 0) {
@@ -785,7 +785,7 @@ int PGconnection::pqGetNotify(int32_t msgLen)
     int bufpos, i;
     if (pqGetInt4(&pid)) return -1;
     msgLen -= 4;
-    bufpos = sprintf(Buffer,"%d:",pid);
+    bufpos = sprintf(Buffer,"%ld:",pid);
     if (msgLen > bufSize - (bufpos + 1)) {
         if (pqGetnchar(Buffer+bufpos, bufSize - (bufpos + 1)))
             return -1;
