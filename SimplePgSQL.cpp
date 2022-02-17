@@ -321,7 +321,11 @@ int PGconnection::execute(const char *query, int progmem)
         setMsg_P(EM_EXEC, PG_RSTAT_HAVE_ERROR);
         return -1;
     }
-    int len = progmem ? strlen_P(query) :strlen(query);
+    int len =
+#ifndef ESP32
+     progmem ? strlen_P(query) :
+#endif
+        strlen(query);
     if (pqPacketSend('Q', query, len+1, progmem)) {
         setMsg_P(EM_WRITE, PG_RSTAT_HAVE_ERROR);
         conn_status = CONNECTION_BAD;
@@ -603,6 +607,7 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
 #endif
     *start++ = ((buf_len + 4) >> 8) & 0xff;
     *start++ = (buf_len + 4) & 0xff;
+#ifndef ESP32
     if (progmem) {
         while (buf_len > 0) {
             while (buf_len > 0 && l > 0) {
@@ -616,6 +621,7 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
         }
     }
     else {
+#endif
         if (buf) {
             if (buf_len <= l) {
                 memcpy(start, buf, buf_len);
@@ -635,7 +641,9 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
             n = client->write((const uint8_t *)buf, buf_len);
             if (n != buf_len) return -1;
         }
+#ifndef ESP32
     }
+#endif
     return 0;
 }
 

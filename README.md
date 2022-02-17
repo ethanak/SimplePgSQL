@@ -1,9 +1,9 @@
 # SimplePgSQL
 
-Simple PostgreSQL connector for Arduino and ESP8266.
+Simple PostgreSQL connector for Arduino, ESP32 and ESP8266.
 
 Only simple queries are implemented. `COPY` is not implemented due to code size limit,
-but probably will be for ESP8266 only. Large objects are not implemented as obsolete
+but probably will be for ESP32 only. Large objects are not implemented as obsolete
 and never be.
 
 Available authorization method are `trust`, `password` and `md5`.
@@ -17,6 +17,8 @@ In this case only number of fields will be fetched from row description packet, 
 
 All methods uses single internal buffer, allocated at `setDbLogin` and freed on `close`.
 It's possible to provide external (statically allocated) buffer, which may be reused in rest of application.
+
+Parameter `progmem` has no meaning for ESP32.
 
 ### Class and Methods
   * [PGconnection](#pgconnection)
