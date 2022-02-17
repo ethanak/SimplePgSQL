@@ -22,6 +22,10 @@
  // 238 469 / 34004
 #include "SimplePgSQL.h"
 
+#ifdef ESP32
+#define strchr_P strchr
+#endif
+
 #ifdef PG_USE_MD5
 static void
 bytesToHex(const uint8_t b[16], char *s)
@@ -37,7 +41,22 @@ bytesToHex(const uint8_t b[16], char *s)
 	s[w] = '\0';
 }
 
-#ifdef ESP8266
+#ifdef ESP32
+#include <mbedtls/md5.h>
+static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
+{
+    md5_context_t context;
+	uint8_t sum[16];
+    *outbuf++ = 'm';
+    *outbuf++ = 'd';
+    *outbuf++ = '5';
+    mbedtls_md5_init(&context);
+    mbedtls_md5_update_ret(&context, (uint8_t *)password, strlen(password));
+    mbedtls_md5_update_ret(&context, (uint8_t *)salt, salt_len);
+    mbedtls_md5_finish_ret( &context, sum);
+	bytesToHex(sum, outbuf);
+}
+#elif defined(ESP8266)
 #include <md5.h>
 static void pg_md5_encrypt(const char *password, char *salt, int salt_len, char *outbuf)
 {
@@ -180,7 +199,9 @@ int PGconnection::status(void)
     int32_t msgLen;
     int32_t areq;
     char * pwd = _passwd;
+#ifdef PG_USE_MD5
     char salt[4];
+#endif
 
     switch(conn_status) {
         case CONNECTION_NEEDED:
@@ -573,8 +594,13 @@ int PGconnection::pqPacketSend(char pack_type, const char *buf, int buf_len, int
         *start++ = pack_type;
         l--;
     }
+#ifdef __AVR__
+    *start++=0;
+    *start++=0;
+#else
     *start++ = ((buf_len + 4) >> 24) & 0xff;
     *start++ = ((buf_len + 4) >> 16) & 0xff;
+#endif
     *start++ = ((buf_len + 4) >> 8) & 0xff;
     *start++ = (buf_len + 4) & 0xff;
     if (progmem) {
@@ -803,7 +829,7 @@ int PGconnection::pqGetNotify(int32_t msgLen)
     return 0;
 }
 
-
+#ifndef ESP32
 int PGconnection::writeMsgPart_P(const char *s, int len, int fine)
 {
     while (len > 0) {
@@ -824,6 +850,7 @@ int PGconnection::writeMsgPart_P(const char *s, int len, int fine)
     }
     return 0;
 }
+#endif
 
 int PGconnection::writeMsgPart(const char *s, int len, int fine)
 {
@@ -857,6 +884,9 @@ int32_t PGconnection::writeFormattedQuery(int32_t length, int progmem, const cha
     const char *percent;
     int blen, rc;
     char buf[32], znak;
+#ifdef ESP32
+        (void) progmem;
+#endif
     if (length) {
         length += 4;
         bufPos = 0;
@@ -867,29 +897,41 @@ int32_t PGconnection::writeFormattedQuery(int32_t length, int progmem, const cha
         Buffer[bufPos++] = (length) & 0xff;
     }
     for (;;) {
+#ifndef ESP32
         if (progmem) {
             percent = strchr_P(format, '%');
         }
         else {
+#endif
             percent = strchr(format, '%');
+#ifndef ESP32
         }
+#endif
         if (!percent) break;
+#ifndef ESP32
         if (progmem) {
             znak = pgm_read_byte(percent+1);
         }
         else {
+#endif
             znak = percent[1];
+#ifndef ESP32
         }
+#endif
         if (!length) {
             msgLen += (percent - format);
         }
         else {
+#ifndef ESP32
             if (progmem) {
                 rc = writeMsgPart_P(format, percent - format, false);
             }
             else {
+#endif
                 rc = writeMsgPart(format, percent - format, false);
+#ifndef ESP32
             }
+#endif
             if (rc) goto write_error;
         }
         format = percent + 2;
@@ -934,19 +976,27 @@ int32_t PGconnection::writeFormattedQuery(int32_t length, int progmem, const cha
         setMsg_P(EM_FORMAT, PG_RSTAT_HAVE_ERROR);
         return -1;
     }
+#ifndef ESP32
     if (progmem) {
         blen = strlen_P(format);
     }
     else {
+#endif
         blen = strlen(format);
+#ifndef ESP32
     }
+#endif
     if (length) {
+#ifndef ESP32
         if (progmem) {
             rc = writeMsgPart_P(format, blen, false);
         }
         else {
+#endif
             rc = writeMsgPart(format, blen, false);
+#ifndef ESP32
         }
+#endif
         if (!rc) {
             rc = writeMsgPart("\0",1,true);
         }

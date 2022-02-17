@@ -31,6 +31,8 @@
 
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
+#elif defined(ESP32)
+#include <WiFi.h>
 #else
 
 // Uncomment line below if you use WiFi shield instead of Ethernet
@@ -56,7 +58,7 @@ const char user[] = "db_username";       // your database user
 const char password[] = "db_password";   // your database password
 const char dbname[] = "db_name";         // your database name
 
-#if defined(ESP8266) || defined(USE_ARDUINO_WIFI)
+#if defined(ESP8266) || defined(USE_ARDUINO_WIFI) || defined(ESP32)
 int WiFiStatus;
 WiFiClient client;
 #else
@@ -72,10 +74,10 @@ PGconnection conn(&client, 0, 1024, buffer);
 void setup(void)
 {
     Serial.begin(
-#ifdef ESP8266
-    115200
-#else
+#ifdef __AVR__
     9600
+#else
+    115200
 #endif
     );
 #ifdef USE_ARDUINO_ETHERNET

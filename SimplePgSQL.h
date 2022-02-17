@@ -22,7 +22,7 @@
 #define _SIMPLEPGSQL 1
 
 
-#ifndef ESP8266
+#ifdef __AVR__
 // You need MD5 library from https://github.com/tzikis/ArduinoMD5
 // for Arduino boards. Uncomment only if you have this library and
 // you must use md5 passwords.
@@ -52,14 +52,19 @@ typedef enum
 
 #ifdef ESP8266
 #define PG_BUFFER_SIZE 2048
+#elif defined(ESP32)
+#define PG_BUFFER_SIZE 16384
 #else
 #define PG_BUFFER_SIZE 256
 #endif
 
 // maximum number of fields in backend response
 // must not exceed number of bits in _formats and _null
+#ifdef ESP32
+#define PG_MAX_FIELDS 64
+#else
 #define PG_MAX_FIELDS 32
-
+#endif
 // ignore notices and notifications
 #define PG_FLAG_IGNORE_NOTICES 1
 // do not store column names
@@ -222,8 +227,13 @@ class PGconnection {
 */
         int16_t _nfields;
         int16_t _ntuples;
+#ifdef ESP32
+        uint64_t _formats;
+        uint64_t _null;
+#else
         uint32_t _formats;
         uint32_t _null;
+#endif
         byte _binary;
         byte _flags;
         int result_status;
