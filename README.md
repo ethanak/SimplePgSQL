@@ -10,6 +10,11 @@ Available authorization method are `trust`, `password` and `md5`.
 Due to code size limit, `md5` method may be disabled in compilation time,
 decreasing code size for Arduino by some kilobytes.
 
+If `md5` is specified as a method in `pg_hba.conf` but the user's password on the PostgreSQL server is encrypted for SCRAM, 
+then SCRAM-based authentication will automatically be chosen instead. 
+As a workaround, consider downgrading password encryption in PostgreSQL from SCRAM to md5 in `postgres.conf`. 
+Then renew user passwords on PostgreSQL server if already created.
+
 All methods are asynchronous, but sometimes may block for a while in case of poor network connection.
 
 As column names and notifications are rarely needed in microcontrollers applications, may be disabled.
